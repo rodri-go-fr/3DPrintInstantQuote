@@ -1,0 +1,101 @@
+That’s a great **condensed and structured** version of our discussion! Here’s the final version formatted for clarity and direct use in documentation or AI-assisted development:
+
+---
+
+# **🛠️ Context for AI/Developer: 3D Print Slicing & Quoting System**
+
+## **🔹 Project Overview**
+I am building a **self-hosted 3D print submission system** that allows users to:
+1. **Upload STL files via a web UI**
+2. **Receive an instant quote** based on material usage and print time
+3. **Manually approve jobs** before printing
+4. **Securely expose the system via Cloudflare Tunnel**
+5. **Queue slicing jobs** to prevent overload
+6. **Provide security against malicious file uploads**
+
+The system will use **Docker containers** to sandbox slicing and **PrusaSlicer’s CLI** for backend processing.
+
+---
+
+## **🔹 Tech Stack**
+### **Frontend (Planned)**
+- **Next.js / React** for Web UI
+- Possibly **Three.js / Babylon.js** for **STL preview**
+- **TailwindCSS / Bootstrap** for UI styling
+
+### **Backend**
+- Mostly TBD
+- **PrusaSlicer CLI** for slicing
+- **Dockerized environment** for security
+- **Cloudflare Tunnel** for secure access (already implemented externally)
+
+### **Infrastructure (Plan)**
+- **Linux Server** (Docker host)
+- **Dockerized PrusaSlicer Backend**
+- **Cloudflare Tunnel** (Zero-trust access)
+
+---
+
+## **🔹 Current Architecture & Flow**
+### **1️⃣ User Workflow**
+1. **User uploads an STL file** via Web UI (or API)
+2. **Frontend displays 3D model**  
+3. **Backend validates STL**
+   - Ensures file integrity using `admesh` or `meshlabserver`
+4. **Backend enqueues the job**
+5. **PrusaSlicer slices the file** inside a **Docker container**
+   - Extracts **print time & filament usage**
+6. **System calculates cost**
+   - Uses **predefined pricing logic** based on filament type and duration
+7. **User is given a quote** and can select different colors or addons that change price
+8. **User reviews quote** and submits print request
+9. **Admin approves/rejects job**
+   - Approved jobs send STL to an email and store it locally
+   - Or **manual print** after admin review
+
+---
+
+## **🔹 Security Considerations**
+### **✅ Secure File Upload**
+- **Restrict file types that will be sliced** to `.stl` (possibly `.3mf`, `.step`, `.obj` later on)
+- **Size limit** to prevent abuse
+- **Scan files for corruption** before slicing
+
+### **✅ Container Isolation**
+- **Docker container is read-only**
+- **Runs under non-root user**
+- **No direct access to host OS**
+
+### **✅ Prevent Overloading**
+- Implement **job queuing** (TBD - Redis or similar)
+- Rate-limit API requests if necessary
+
+---
+
+## **🔹 Tasks**
+### **1️⃣ Backend Setup**
+✅ **Create the Docker container**  
+✅ **Load PrusaSlicer CLI into the container**  
+✅ **Test slicing an STL through CLI**  
+✅ **Extract part cost, print time, and possible errors**
+
+---
+
+### **2️⃣ Implement Web UI**
+🔲 **STL preview (Three.js or Babylon.js)**  
+🔲 **File upload interface**  
+🔲 **Live status updates for print jobs**  
+🔲 **Allow users to apply colors and material types to file (optional feature)**  
+
+---
+
+### **3️⃣ Create Pricing Model**
+🔲 Define a **pricing formula** based on:
+- **Material type** (PLA, PETG)
+- **Selected color** (possible upcharge)
+- **Print duration** ($ per hour)
+- **Support material usage** (extra cost)
+
+---
+
+This should be **ready for AI-assisted coding** or for a developer to take over efficiently. Let me know if you want any refinements! 🚀
