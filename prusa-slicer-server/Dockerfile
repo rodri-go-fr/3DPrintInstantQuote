@@ -12,9 +12,16 @@ RUN apt update && apt install -y \
     redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app
-USER printer
+# Install Python dependencies
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install -r /app/requirements.txt
 
-# Start a shell session when running interactively
-CMD ["/bin/bash"]
+# Copy server and slicing script
+COPY server.py /app/server.py
+COPY slice_model.py /app/slice_model.py
+
+# Expose API port
+EXPOSE 5000
+
+# Start Flask server
+CMD ["python3", "/app/server.py"]
