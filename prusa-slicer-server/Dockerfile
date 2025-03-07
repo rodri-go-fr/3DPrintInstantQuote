@@ -1,4 +1,4 @@
-# Use Debian as the base OS (lightweight & compatible)
+# Use Debian as base
 FROM debian:latest
 
 # Set non-root user for security
@@ -12,12 +12,9 @@ RUN apt update && apt install -y \
     redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up work directory
+# Set working directory
 WORKDIR /app
 USER printer
 
-# Expose API port
-EXPOSE 5000
-
-# Start shell (for now, will replace with API later)
+# Start a shell session when running interactively
 CMD ["/bin/bash"]

@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  prusa-slicer:
+    container_name: prusa-slicer-container
+    build: ./prusa-slicer-server  # Path to Dockerfile
+    volumes:
+      - ./userModels:/app/shared  # Mount shared folder
+    restart: unless-stopped
+    tty: true
