@@ -1,23 +1,43 @@
 # 3D Print Instant Quote
-Get an instant quote of an uploaded 3d printed object
 
-## 🚀 Purpose
-This project automates slicing 3D models using **PrusaSlicer** inside a **Docker container**, allowing easy STL uploads and generating instant G-code.
+## Overview
+This project provides an automated system to upload STL files, estimate printing costs, and generate G-code for 3D printing. The backend runs **PrusaSlicer CLI** inside a **Docker container**, and the frontend is built with **Next.js**.
 
-## 📁 Current Files
-- `Dockerfile` → Sets up **PrusaSlicer CLI** inside Docker.
-- `docker-compose.yml` → Defines the container setup.
-- `start.sh` → Starts the container.
-- `install.sh` → Installs dependencies (Docker, Docker Compose).
-- `Makefile` → Provides easy commands (`make start`, `make stop`).
-- `UserModels/` → Stores uploaded STL files & generated G-code (ignored in Git).
+## Features
+- Upload STL files through a web interface.
+- Get an instant quote based on filament usage ($50/kg).
+- Automatically slice models using PrusaSlicer.
+- Reject models that exceed the printer’s build volume.
+- Supports configurable infill density and automatic supports.
 
-## 🛠️ How to Run
-### **1️⃣ Install Dependencies**
-make install
+## Project Structure
+3DPrintInstantQuote-1/ │── prusa-slicer-server/ # Backend (Flask API + PrusaSlicer) │ ├── Dockerfile │ ├── server.py # Flask API │ ├── slice_model.py # Slicing logic │ ├── requirements.txt # Python dependencies │── frontend/ # Frontend (Next.js) │── UserModels/ # Shared folder for STL & G-code │── docker-compose.yml │── README.md │── Makefile │── start.sh
 
-2️⃣ Start the Container
-make start
+## Prerequisites
+- Docker
+- Node.js & npm (for Next.js frontend)
 
-3️⃣ Enter the Container (Optional)
-make stop
+## Installation
+1. Clone the repository:
+   cd 3DPrintInstantQuote
+
+2. Install dependencies:
+    make install
+3. Start the backend:
+    make start
+4. Start the frontend:
+    cd frontend
+    npm install
+    npm run dev
+5. Open http://localhost:3000 to use the web interface.
+
+##API Endpoints
+Method	Endpoint	Description
+POST	/upload	    Uploads STL file and slices it
+
+
+##Frontend Features
+The frontend (Next.js) allows users to:
+* Select an STL file and upload it.
+* Receive slicing results (filament usage, estimated time, cost).
+* View errors if the model is too large.
