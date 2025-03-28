@@ -9,16 +9,22 @@ import { ModelViewer } from "@/components/model-viewer"
 import { ColorSelector } from "@/components/color-selector"
 import { MaterialSelector } from "@/components/material-selector"
 import { QualitySelector } from "@/components/quality-selector"
-import { ArrowLeft, ArrowRight, Palette, Layers, Settings } from "lucide-react"
+import { ArrowLeft, ArrowRight, Palette, Layers, Settings, Loader2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { motion } from "framer-motion"
+import { getJobStatus } from "@/services/api"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+// Define API base URL for model files
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function CustomizePage() {
   const router = useRouter()
   const [modelName, setModelName] = useState<string | null>(null)
   const [modelUrl, setModelUrl] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [selectedSpecialFilament, setSelectedSpecialFilament] = useState<string | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null)
@@ -27,22 +33,119 @@ export default function CustomizePage() {
   const [isMultiColor, setIsMultiColor] = useState(false)
   const [multiColorDetails, setMultiColorDetails] = useState("")
   const [isClient, setIsClient] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setIsClient(true)
+    
     // Check if we have a model in session storage
     const storedModel = sessionStorage.getItem("uploadedModel")
-    const storedModelUrl = sessionStorage.getItem("uploadedModelUrl")
+    const storedJobId = sessionStorage.getItem("uploadedModelJobId")
 
-    if (!storedModel) {
+    if (!storedModel || !storedJobId) {
       router.push("/upload")
       return
     }
 
     setModelName(storedModel)
-    if (storedModelUrl) {
-      setModelUrl(storedModelUrl)
+    setJobId(storedJobId)
+    
+    // Fetch job status from the backend
+    const fetchJobStatus = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        
+        const jobStatus = await getJobStatus(storedJobId)
+        
+        // If the job is still processing, poll for updates
+        if (jobStatus.status === 'pending' || jobStatus.status === 'processing') {
+          // Poll every 3 seconds until the job is complete
+          const pollingInterval = setInterval(async () => {
+            try {
+              const updatedStatus = await getJobStatus(storedJobId)
+              
+              if (updatedStatus.status === 'completed' || updatedStatus.status === 'failed') {
+                clearInterval(pollingInterval)
+                
+                if (updatedStatus.status === 'failed') {
+                  setError(updatedStatus.error || 'Failed to process model')
+                } else {
+                  // Set material and color from the job if available
+                  if (updatedStatus.material_id) {
+                    setSelectedMaterial(updatedStatus.material_id)
+                  }
+                  
+                  if (updatedStatus.color_id) {
+                    setSelectedColor(`#${updatedStatus.color_id}`)
+                  }
+                }
+              }
+            } catch (err: any) {
+              clearInterval(pollingInterval)
+              setError(err.message || 'Failed to get job status')
+            }
+          }, 3000)
+          
+          // Clean up interval on component unmount
+          return () => clearInterval(pollingInterval)
+        } else if (jobStatus.status === 'failed') {
+          setError(jobStatus.error || 'Failed to process model')
+        } else {
+          // Set material and color from the job if available
+          if (jobStatus.material_id) {
+            setSelectedMaterial(jobStatus.material_id)
+          }
+          
+          if (jobStatus.color_id) {
+            setSelectedColor(`#${jobStatus.color_id}`)
+          }
+        }
+        
+        // Set model URL for the viewer
+        if (jobStatus.filename) {
+          const modelUrlPath = `${API_BASE_URL}/api/file/${jobStatus.filename}`;
+          
+          // Check if the file exists before setting the URL
+          try {
+            const fileCheck = await fetch(modelUrlPath, { method: 'HEAD' });
+            if (fileCheck.ok) {
+              setModelUrl(modelUrlPath);
+            } else {
+              console.log("Model file not available yet");
+              
+              // Check if this is a 3MF file that might have been converted to STL
+              if (jobStatus.filename.toLowerCase().endsWith('.3mf')) {
+                const stlFilename = jobStatus.filename.replace(/\.3mf$/i, '.stl');
+                const stlUrlPath = `${API_BASE_URL}/api/file/${stlFilename}`;
+                
+                try {
+                  const stlCheck = await fetch(stlUrlPath, { method: 'HEAD' });
+                  if (stlCheck.ok) {
+                    console.log("Found converted STL file");
+                    setModelUrl(stlUrlPath);
+                  }
+                } catch (stlErr) {
+                  console.error("Error checking STL version:", stlErr);
+                  // Don't set error yet
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error checking model file:", err);
+            // Don't set error yet
+          }
+        }
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to get job status')
+      } finally {
+        setIsLoading(false)
+      }
     }
+    
+    fetchJobStatus()
   }, [router])
 
   const handleColorSelect = (color: string, isSpecial?: boolean, specialId?: string) => {
@@ -75,18 +178,38 @@ export default function CustomizePage() {
     setSelectedQuality(quality)
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (activeTab === "color" && (selectedColor || selectedSpecialFilament || isMultiColor)) {
       setActiveTab("material")
     } else if (activeTab === "material" && selectedMaterial) {
-      // Store selections in session storage for the quote page
-      sessionStorage.setItem("selectedColor", selectedColor || "")
-      sessionStorage.setItem("selectedSpecialFilament", selectedSpecialFilament || "")
-      sessionStorage.setItem("selectedMaterial", selectedMaterial)
-      sessionStorage.setItem("selectedQuality", selectedQuality)
-      sessionStorage.setItem("isMultiColor", isMultiColor.toString())
-      sessionStorage.setItem("multiColorDetails", multiColorDetails)
-      router.push("/quote")
+      try {
+        // Update the job with the selected quality
+        if (jobId) {
+          // Get the current job status
+          const jobStatus = await getJobStatus(jobId);
+          
+          // If the job is completed, we can update the quality
+          if (jobStatus.status === 'completed') {
+            // In a real app, you would have an API endpoint to update the job
+            // For now, we'll just store it in session storage
+            console.log(`Updating job ${jobId} with quality: ${selectedQuality}`);
+          }
+        }
+        
+        // Store selections in session storage for the quote page
+        sessionStorage.setItem("selectedColor", selectedColor || "")
+        sessionStorage.setItem("selectedSpecialFilament", selectedSpecialFilament || "")
+        sessionStorage.setItem("selectedMaterial", selectedMaterial)
+        sessionStorage.setItem("selectedQuality", selectedQuality)
+        sessionStorage.setItem("isMultiColor", isMultiColor.toString())
+        sessionStorage.setItem("multiColorDetails", multiColorDetails)
+        sessionStorage.setItem("jobId", jobId || "")
+        router.push("/quote")
+      } catch (err) {
+        console.error("Error updating job:", err);
+        // Continue to quote page even if update fails
+        router.push("/quote")
+      }
     }
   }
 
@@ -100,6 +223,36 @@ export default function CustomizePage() {
 
   if (!isClient || !modelName) {
     return <div className="container py-12 text-center">Loading...</div>
+  }
+  
+  if (isLoading) {
+    return (
+      <div className="container py-12 flex flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+        <h2 className="text-xl font-medium mb-2">Processing Your Model</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          We're preparing your 3D model for customization. This may take a few moments depending on the complexity of your model.
+        </p>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="container py-12">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        
+        <div className="flex justify-center">
+          <Button onClick={() => router.push("/upload")} variant="default">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Upload
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -131,9 +284,11 @@ export default function CustomizePage() {
                 </CardHeader>
                 <CardContent className="aspect-square p-0">
                   <ModelViewer
-                    modelPath={modelUrl || "/assets/3d/duck.glb"}
+                    modelPath={modelUrl || "fallback"}
                     color={selectedColor || "#cccccc"}
                     material={selectedMaterial || "PLA"}
+                    jobId={jobId || undefined}
+                    isLoading={isLoading}
                   />
                 </CardContent>
               </Card>
@@ -223,4 +378,3 @@ export default function CustomizePage() {
     </div>
   )
 }
-

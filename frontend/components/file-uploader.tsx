@@ -6,15 +6,19 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileUp, AlertCircle } from "lucide-react"
+import { Upload, FileUp, AlertCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { uploadModel } from "@/services/api"
+import { Progress } from "@/components/ui/progress"
 
 export function FileUploader() {
   const router = useRouter()
   const [isDragging, setIsDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   const allowedFileTypes = [".stl", ".3mf", ".step", ".obj"]
 
@@ -68,12 +72,46 @@ export function FileUploader() {
   const handleSubmit = async () => {
     if (!file) return
 
-    // In a real app, you would upload the file to your backend
-    // For now, we'll just simulate this by storing the file in session storage
-    sessionStorage.setItem("uploadedModel", file.name)
-
-    // Redirect to the customization page
-    router.push("/customize")
+    try {
+      setIsUploading(true)
+      setError(null)
+      
+      // Simulate upload progress (since fetch doesn't provide progress events easily)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const newProgress = prev + (100 - prev) * 0.1
+          return newProgress > 90 ? 90 : newProgress
+        })
+      }, 300)
+      
+      // Upload the file to the backend
+      const response = await uploadModel({
+        file,
+        // Default values - these can be customized in the next step
+        material_id: "pla",
+        color_id: "white",
+        quality_id: "standard",
+        fill_density: 0.15,
+        enable_supports: true
+      })
+      
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+      
+      // Store the job ID and filename in session storage
+      sessionStorage.setItem("uploadedModel", file.name)
+      sessionStorage.setItem("uploadedModelJobId", response.job_id)
+      
+      // Short delay to show 100% progress before redirecting
+      setTimeout(() => {
+        // Redirect to the customization page
+        router.push("/customize")
+      }, 500)
+    } catch (err: any) {
+      setError(err.message || "Failed to upload file. Please try again.")
+      setIsUploading(false)
+      setUploadProgress(0)
+    }
   }
 
   return (
@@ -117,9 +155,33 @@ export function FileUploader() {
         </div>
       )}
 
-      <Button className="w-full" size="lg" disabled={!file} onClick={handleSubmit}>
-        <FileUp className="mr-2 h-4 w-4" />
-        {file ? "Continue to Customization" : "Upload a File"}
+      {isUploading && (
+        <div className="space-y-2">
+          <Progress value={uploadProgress} className="h-2 w-full" />
+          <div className="flex items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Uploading and processing your model...
+          </div>
+        </div>
+      )}
+
+      <Button 
+        className="w-full" 
+        size="lg" 
+        disabled={!file || isUploading} 
+        onClick={handleSubmit}
+      >
+        {isUploading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Uploading...
+          </>
+        ) : (
+          <>
+            <FileUp className="mr-2 h-4 w-4" />
+            {file ? "Continue to Customization" : "Upload a File"}
+          </>
+        )}
       </Button>
 
       <div className="text-center text-sm text-muted-foreground">
@@ -130,4 +192,3 @@ export function FileUploader() {
     </div>
   )
 }
-

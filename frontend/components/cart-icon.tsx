@@ -85,17 +85,17 @@ export function CartIcon() {
                     <div className="flex-1 min-w-0">
                       <p className="truncate font-medium">{item.modelName || item.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {item.quantity} × ${(item.price / item.quantity).toFixed(2)}
+                        {item.quantity} × ${((item.price || 0) / (item.quantity || 1)).toFixed(2)}
                       </p>
                     </div>
-                    <div className="font-medium">${item.price.toFixed(2)}</div>
+                    <div className="font-medium">${(item.price || 0).toFixed(2)}</div>
                   </div>
                 ))}
               </div>
               <DropdownMenuSeparator />
               <div className="flex justify-between mb-4">
                 <span className="font-medium">Total:</span>
-                <span className="font-medium">${cartItems.reduce((sum, item) => sum + item.price, 0).toFixed(2)}</span>
+                <span className="font-medium">${cartItems.reduce((sum, item) => sum + (item.price || 0), 0).toFixed(2)}</span>
               </div>
             </>
           )}
@@ -109,4 +109,3 @@ export function CartIcon() {
     </DropdownMenu>
   )
 }
-

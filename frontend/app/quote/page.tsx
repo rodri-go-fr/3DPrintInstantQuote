@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { ModelViewer } from "@/components/model-viewer"
-import { ArrowLeft, Download, ShoppingCart, Share2, Plus, Minus, AlertCircle } from "lucide-react"
+import { ArrowLeft, Download, ShoppingCart, Share2, Plus, Minus, AlertCircle, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,6 +15,10 @@ import Link from "next/link"
 import { SiteHeader } from "@/components/site-header"
 import { SiteFooter } from "@/components/site-footer"
 import { motion } from "framer-motion"
+import { getJobStatus, getMaterials } from "@/services/api"
+
+// Define API base URL for model files
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 interface QuoteDetails {
   basePrice: number
@@ -24,6 +28,15 @@ interface QuoteDetails {
   qualityModifier: number
   total: number
   totalWithQuantity: number
+  filamentUsed?: number
+  estimatedTime?: string
+  hasSupports?: boolean
+  size?: {
+    x: number
+    y: number
+    z: number
+  }
+  volumeCm3?: number
 }
 
 interface CartItem {
@@ -37,6 +50,7 @@ interface CartItem {
   quantity: number
   isMultiPart: boolean
   price: number
+  jobId: string
 }
 
 // Quality options for reference
@@ -50,6 +64,8 @@ const QUALITY_OPTIONS = {
 export default function QuotePage() {
   const router = useRouter()
   const [modelName, setModelName] = useState<string | null>(null)
+  const [modelUrl, setModelUrl] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [selectedSpecialFilament, setSelectedSpecialFilament] = useState<string | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null)
@@ -69,9 +85,12 @@ export default function QuotePage() {
   })
   const [addedToCart, setAddedToCart] = useState(false)
   const [isClient, setIsClient] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setIsClient(true)
+    
     // Check if we have all the required data in session storage
     const storedModel = sessionStorage.getItem("uploadedModel")
     const storedColor = sessionStorage.getItem("selectedColor")
@@ -80,8 +99,9 @@ export default function QuotePage() {
     const storedQuality = sessionStorage.getItem("selectedQuality")
     const storedIsMultiColor = sessionStorage.getItem("isMultiColor")
     const storedMultiColorDetails = sessionStorage.getItem("multiColorDetails")
+    const storedJobId = sessionStorage.getItem("jobId")
 
-    if (!storedModel || (!storedColor && !storedSpecialFilament && !storedIsMultiColor) || !storedMaterial) {
+    if (!storedModel || (!storedColor && !storedSpecialFilament && !storedIsMultiColor) || !storedMaterial || !storedJobId) {
       router.push("/upload")
       return
     }
@@ -93,122 +113,217 @@ export default function QuotePage() {
     setSelectedQuality(storedQuality || "standard")
     setIsMultiColor(storedIsMultiColor === "true")
     setMultiColorDetails(storedMultiColorDetails || "")
-
-    // In a real app, you would fetch the quote from your backend API
-    // For demo purposes, we'll calculate a mock quote
-    calculateMockQuote(
-      storedColor || "#cccccc",
-      storedSpecialFilament || "",
-      storedMaterial,
-      storedQuality || "standard",
-      storedIsMultiColor === "true",
-      1,
-      false,
-    )
+    setJobId(storedJobId)
+    
+    // Fetch job status and quote from the backend
+    const fetchJobStatus = async () => {
+      try {
+        setIsLoading(true)
+        setError(null)
+        
+        const jobStatus = await getJobStatus(storedJobId)
+        
+        if (jobStatus.status === 'failed') {
+          setError(jobStatus.error || 'Failed to process model')
+          return
+        }
+        
+        if (jobStatus.status !== 'completed') {
+          // If the job is not completed, poll for updates
+          const pollingInterval = setInterval(async () => {
+            try {
+              const updatedStatus = await getJobStatus(storedJobId)
+              
+              if (updatedStatus.status === 'completed' || updatedStatus.status === 'failed') {
+                clearInterval(pollingInterval)
+                
+                if (updatedStatus.status === 'failed') {
+                  setError(updatedStatus.error || 'Failed to process model')
+                } else {
+                  // Process the completed job
+                  processCompletedJob(updatedStatus, storedQuality || "standard", 1, false)
+                }
+              }
+            } catch (err: any) {
+              clearInterval(pollingInterval)
+              setError(err.message || 'Failed to get job status')
+            }
+          }, 3000)
+          
+          // Clean up interval on component unmount
+          return () => clearInterval(pollingInterval)
+        } else {
+          // Process the completed job
+          processCompletedJob(jobStatus, storedQuality || "standard", 1, false)
+        }
+        
+        // Set model URL for the viewer
+        if (jobStatus.filename) {
+          const modelUrlPath = `${API_BASE_URL}/api/file/${jobStatus.filename}`;
+          
+          // Check if the file exists before setting the URL
+          try {
+            const fileCheck = await fetch(modelUrlPath, { method: 'HEAD' });
+            if (fileCheck.ok) {
+              setModelUrl(modelUrlPath);
+            } else {
+              console.log("Model file not available yet");
+              
+              // Check if this is a 3MF file that might have been converted to STL
+              if (jobStatus.filename.toLowerCase().endsWith('.3mf')) {
+                const stlFilename = jobStatus.filename.replace(/\.3mf$/i, '.stl');
+                const stlUrlPath = `${API_BASE_URL}/api/file/${stlFilename}`;
+                
+                try {
+                  const stlCheck = await fetch(stlUrlPath, { method: 'HEAD' });
+                  if (stlCheck.ok) {
+                    console.log("Found converted STL file");
+                    setModelUrl(stlUrlPath);
+                  }
+                } catch (stlErr) {
+                  console.error("Error checking STL version:", stlErr);
+                  // Don't set error yet
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error checking model file:", err);
+            // Don't set error yet
+          }
+        }
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to get job status')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchJobStatus()
   }, [router])
-
-  const calculateMockQuote = (
-    color: string,
-    specialFilament: string,
-    material: string,
-    quality: string,
-    multiColor: boolean,
-    qty: number,
-    multiPart: boolean,
-  ) => {
-    // Mock calculation - in a real app, this would come from your backend
-    const basePrice = 25.0 // Base price for the model
-
-    // Color price modifiers
-    let colorModifier = 0
-    const premiumColors = ["#ff9900", "#800080", "#ff69b4", "#008080"]
-    const luxuryColors = ["#ffd700", "#c0c0c0"]
-
-    if (!multiColor && !specialFilament) {
-      if (luxuryColors.includes(color)) {
-        colorModifier = 15
-      } else if (premiumColors.includes(color)) {
-        colorModifier = 8
-      } else if (color !== "#ffffff" && color !== "#000000") {
-        colorModifier = 5
+  
+  // Get quality modifiers from the backend
+  const [qualityModifiers, setQualityModifiers] = useState<{[key: string]: number}>({
+    draft: -5,
+    standard: 0,
+    high: 10,
+    ultra: 15
+  });
+  
+  // Load quality modifiers from the backend
+  useEffect(() => {
+    const loadQualityModifiers = async () => {
+      try {
+        const materialsData = await getMaterials();
+        
+        // Check if quality levels are available in the response
+        if (materialsData.global_settings && materialsData.global_settings.quality_levels) {
+          const modifiers: {[key: string]: number} = {};
+          
+          // Map quality levels to modifiers
+          materialsData.global_settings.quality_levels.forEach((level: any) => {
+            modifiers[level.id] = level.price_modifier;
+          });
+          
+          setQualityModifiers(modifiers);
+        }
+      } catch (error) {
+        console.error("Error loading quality modifiers:", error);
       }
+    };
+    
+    loadQualityModifiers();
+  }, []);
+
+  // Process a completed job and set quote details
+  const processCompletedJob = (jobStatus: any, quality: string, qty: number, multiPart: boolean) => {
+    if (!jobStatus.result) {
+      setError('No result data available for this job')
+      return
     }
-
-    // Special filament modifier
-    if (specialFilament) {
-      // These would come from your backend in a real app
-      const specialFilamentPrices = {
-        rainbow: 12,
-        galaxy: 15,
-        marble: 12,
-        glow: 18,
-        silk: 14,
-        wood: 16,
-      }
-      colorModifier = specialFilamentPrices[specialFilament as keyof typeof specialFilamentPrices] || 10
+    
+    const result = jobStatus.result
+    const priceInfo = result.price_info
+    
+    if (!priceInfo) {
+      setError('No pricing information available')
+      return
     }
-
-    // Multi-color modifier
-    const multiColorModifier = multiColor ? 15 : 0
-
-    // Material price modifiers
-    let materialModifier = 0
-    if (material === "PETG") {
-      materialModifier = 15
-    } else if (material === "ABS") {
-      materialModifier = 25
-    }
-
-    // Quality price modifier
-    const qualityModifier = QUALITY_OPTIONS[quality as keyof typeof QUALITY_OPTIONS]?.priceModifier || 0
-
-    const total = basePrice + colorModifier + materialModifier + multiColorModifier + qualityModifier
-
-    // Apply quantity discount if applicable
+    
+    // Get base price with markup from backend calculation
+    const basePrice = priceInfo.base_price || 0
+    const basePriceWithMarkup = priceInfo.base_price_with_markup || 0
+    
+    // Get modifiers from backend
+    const colorModifier = priceInfo.color_addon || 0
+    const materialModifier = priceInfo.material_modifier || 0
+    
+    // Calculate multi-color modifier (this is applied on the frontend)
+    const multiColorModifier = isMultiColor ? 15 : 0
+    
+    // Get quality modifier from backend
+    const qualityModifier = priceInfo.quality_modifier || 0
+    
+    // Calculate total price: base price with markup + all modifiers
+    const total = basePriceWithMarkup + colorModifier + materialModifier + multiColorModifier + qualityModifier
+    
+    // Apply quantity
     let totalWithQuantity = total * qty
-
+    
     // Apply multi-part discount if applicable
     if (multiPart && qty > 1) {
       // 10% discount for multi-part prints
       totalWithQuantity = totalWithQuantity * 0.9
     }
-
+    
+    // Set quote details with proper validation to prevent NaN
     setQuoteDetails({
-      basePrice,
-      colorModifier,
-      materialModifier,
-      multiColorModifier,
-      qualityModifier,
-      total,
-      totalWithQuantity,
+      basePrice: basePriceWithMarkup || 0, // Show the base price with markup
+      colorModifier: colorModifier || 0,
+      materialModifier: materialModifier || 0,
+      multiColorModifier: multiColorModifier || 0,
+      qualityModifier: qualityModifier || 0,
+      total: total || 0,
+      totalWithQuantity: totalWithQuantity || 0,
+      filamentUsed: result.filament_used_g,
+      estimatedTime: result.estimated_time,
+      hasSupports: result.has_supports,
+      size: result.size,
+      volumeCm3: result.volume_cm3
     })
   }
 
   const handleQuantityChange = (newQuantity: number) => {
     if (newQuantity < 1) return
     setQuantity(newQuantity)
-    calculateMockQuote(
-      selectedColor || "#cccccc",
-      selectedSpecialFilament || "",
-      selectedMaterial || "PLA",
-      selectedQuality,
-      isMultiColor,
-      newQuantity,
-      isMultiPart,
-    )
+    
+    // Recalculate total with new quantity
+    const newTotalWithQuantity = quoteDetails.total * newQuantity
+    
+    // Apply multi-part discount if applicable
+    const finalTotal = isMultiPart && newQuantity > 1 
+      ? newTotalWithQuantity * 0.9 
+      : newTotalWithQuantity
+    
+    setQuoteDetails({
+      ...quoteDetails,
+      totalWithQuantity: finalTotal
+    })
   }
 
   const handleMultiPartChange = (checked: boolean) => {
     setIsMultiPart(checked)
-    calculateMockQuote(
-      selectedColor || "#cccccc",
-      selectedSpecialFilament || "",
-      selectedMaterial || "PLA",
-      selectedQuality,
-      isMultiColor,
-      quantity,
-      checked,
-    )
+    
+    // Recalculate total with multi-part discount
+    const totalWithQuantity = quoteDetails.total * quantity
+    const finalTotal = checked && quantity > 1 
+      ? totalWithQuantity * 0.9 
+      : totalWithQuantity
+    
+    setQuoteDetails({
+      ...quoteDetails,
+      totalWithQuantity: finalTotal
+    })
   }
 
   const addToCart = () => {
@@ -224,6 +339,7 @@ export default function QuotePage() {
       quantity,
       isMultiPart,
       price: quoteDetails.totalWithQuantity,
+      jobId: jobId || ""
     }
 
     // For demo purposes, we'll store in session storage
@@ -240,6 +356,36 @@ export default function QuotePage() {
 
   if (!isClient) {
     return <div className="container py-12 text-center">Loading...</div>
+  }
+  
+  if (isLoading) {
+    return (
+      <div className="container py-12 flex flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+        <h2 className="text-xl font-medium mb-2">Calculating Your Quote</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          We're calculating the price for your 3D print. This may take a few moments.
+        </p>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="container py-12">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        
+        <div className="flex justify-center">
+          <Button onClick={() => router.push("/customize")} variant="default">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Customization
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (!modelName || !selectedMaterial) {
@@ -275,9 +421,11 @@ export default function QuotePage() {
                 </CardHeader>
                 <CardContent className="aspect-square p-0">
                   <ModelViewer
-                    modelPath="/assets/3d/duck.glb"
+                    modelPath={modelUrl || "fallback"}
                     color={selectedColor || "#cccccc"}
-                    material={selectedMaterial}
+                    material={selectedMaterial || "PLA"}
+                    jobId={jobId || undefined}
+                    isLoading={isLoading}
                   />
                 </CardContent>
               </Card>
@@ -321,7 +469,7 @@ export default function QuotePage() {
                           </span>
                         ) : (
                           <>
-                            <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: selectedColor }} />
+                            <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: selectedColor || "#cccccc" }} />
                             <span className="text-sm font-medium">
                               {selectedColor === "#ffffff"
                                 ? "White"
@@ -422,6 +570,7 @@ export default function QuotePage() {
                         <span className="text-base font-medium">Unit Price:</span>
                         <span className="text-base font-medium">${quoteDetails.total.toFixed(2)}</span>
                       </div>
+                      {/* Print details are hidden as requested */}
                     </div>
 
                     <div className="pt-4 space-y-4">
@@ -496,10 +645,10 @@ export default function QuotePage() {
                     className="w-full bg-primary hover:bg-primary/90"
                     size="lg"
                     onClick={addToCart}
-                    disabled={addedToCart}
+                    disabled={addedToCart || quoteDetails.totalWithQuantity < 0}
                   >
                     <ShoppingCart className="mr-2 h-4 w-4" />
-                    {addedToCart ? "Added to Cart" : "Add to Cart"}
+                    {addedToCart ? "Added to Cart" : quoteDetails.totalWithQuantity === 0 ? "Add to Cart (Free)" : "Add to Cart"}
                   </Button>
 
                   {addedToCart && (
@@ -535,4 +684,3 @@ export default function QuotePage() {
     </div>
   )
 }
-

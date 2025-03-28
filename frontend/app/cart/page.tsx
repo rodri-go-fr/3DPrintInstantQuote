@@ -14,7 +14,23 @@ import { motion } from "framer-motion"
 
 export default function CartPage() {
   const router = useRouter()
-  const [cartItems, setCartItems] = useState<any[]>([])
+  interface CartItem {
+    modelName: string;
+    name?: string;
+    image?: string;
+    selectedColor: string;
+    selectedSpecialFilament: string;
+    selectedMaterial: string;
+    selectedQuality: string;
+    isMultiColor: boolean;
+    multiColorDetails: string;
+    quantity: number;
+    isMultiPart: boolean;
+    price: number;
+    jobId?: string;
+  }
+
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [subtotal, setSubtotal] = useState(0)
   const [total, setTotal] = useState(0)
   const [isClient, setIsClient] = useState(false)
@@ -28,7 +44,7 @@ export default function CartPage() {
       setCartItems(parsedCart)
 
       // Calculate totals
-      const calculatedSubtotal = parsedCart.reduce((sum: number, item: any) => sum + item.price, 0)
+      const calculatedSubtotal = parsedCart.reduce((sum: number, item: any) => sum + (item.price || 0), 0)
       setSubtotal(calculatedSubtotal)
       setTotal(calculatedSubtotal)
     }
@@ -43,7 +59,7 @@ export default function CartPage() {
     sessionStorage.setItem("cart", JSON.stringify(newCart))
 
     // Recalculate totals
-    const newSubtotal = newCart.reduce((sum, item) => sum + item.price, 0)
+    const newSubtotal = newCart.reduce((sum, item) => sum + (item.price || 0), 0)
     setSubtotal(newSubtotal)
     setTotal(newSubtotal)
 
@@ -58,7 +74,7 @@ export default function CartPage() {
     const item = newCart[index]
 
     // Calculate new price based on quantity
-    const unitPrice = item.price / item.quantity
+    const unitPrice = (item.price || 0) / (item.quantity || 1)
     const newPrice = unitPrice * newQuantity
 
     // Update item
@@ -74,7 +90,7 @@ export default function CartPage() {
     sessionStorage.setItem("cart", JSON.stringify(newCart))
 
     // Recalculate totals
-    const newSubtotal = newCart.reduce((sum, item) => sum + item.price, 0)
+    const newSubtotal = newCart.reduce((sum, item) => sum + (item.price || 0), 0)
     setSubtotal(newSubtotal)
     setTotal(newSubtotal)
 
@@ -212,7 +228,7 @@ export default function CartPage() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-medium">${item.price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-medium">${(item.price || 0).toFixed(2)}</TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon" onClick={() => removeItem(index)}>
                               <Trash className="h-4 w-4" />
@@ -265,4 +281,3 @@ export default function CartPage() {
     </div>
   )
 }
-

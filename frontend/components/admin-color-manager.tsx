@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMaterials, updateMaterials } from "@/services/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,18 +40,94 @@ export function AdminColorManager() {
     setEditingId(id)
   }
 
-  const handleSave = (id: string) => {
-    setEditingId(null)
-    // In a real app, you would save to your backend here
+  const handleSave = async (id: string) => {
+    try {
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Find the color to update across all materials
+      const updatedMaterials = currentData.materials.map((material: any) => {
+        // Update the color in this material's colors array
+        const updatedColors = material.colors.map((color: any) => {
+          if (color.id === id) {
+            // Find the color in our local state
+            const updatedColor = colors.find(c => c.id === id);
+            if (!updatedColor) return color;
+            
+            // Update the color properties
+            return {
+              ...color,
+              name: updatedColor.name,
+              hex: updatedColor.hex,
+              addon_price: updatedColor.priceModifier
+            };
+          }
+          return color;
+        });
+        
+        // Return the material with updated colors
+        return {
+          ...material,
+          colors: updatedColors
+        };
+      });
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        alert("Color updated successfully!");
+        setEditingId(null);
+      } else {
+        alert(`Failed to update color: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error updating color:", error);
+      alert("Failed to update color. Please try again.");
+    }
   }
 
   const handleCancel = () => {
     setEditingId(null)
   }
 
-  const handleDelete = (id: string) => {
-    setColors(colors.filter((color) => color.id !== id))
-    // In a real app, you would delete from your backend here
+  const handleDelete = async (id: string) => {
+    try {
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Remove the color from all materials
+      const updatedMaterials = currentData.materials.map((material: any) => {
+        // Filter out the color to delete
+        const updatedColors = material.colors.filter((color: any) => color.id !== id);
+        
+        // Return the material with updated colors
+        return {
+          ...material,
+          colors: updatedColors
+        };
+      });
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        // Update local state
+        setColors(colors.filter((color) => color.id !== id));
+        alert("Color deleted successfully!");
+      } else {
+        alert(`Failed to delete color: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error deleting color:", error);
+      alert("Failed to delete color. Please try again.");
+    }
   }
 
   const handleChange = (id: string, field: keyof ColorItem, value: string | number) => {
@@ -68,23 +145,95 @@ export function AdminColorManager() {
     setNewColor({ ...newColor, [field]: value })
   }
 
-  const handleAddColor = () => {
+  const handleAddColor = async () => {
     if (!newColor.name || !newColor.hex) return
 
-    const id = newColor.name.toLowerCase().replace(/\s+/g, "-")
-    const newColorItem: ColorItem = {
-      id,
-      name: newColor.name,
-      hex: newColor.hex,
-      priceModifier: newColor.priceModifier || 0,
+    try {
+      // Generate ID from name
+      const id = newColor.name.toLowerCase().replace(/\s+/g, "-");
+      
+      // Create new color item
+      const newColorItem: ColorItem = {
+        id,
+        name: newColor.name,
+        hex: newColor.hex,
+        priceModifier: newColor.priceModifier || 0,
+      };
+      
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Add the new color to all materials
+      const updatedMaterials = currentData.materials.map((material: any) => {
+        // Add the new color to this material's colors array
+        const updatedColors = [
+          ...material.colors,
+          {
+            id,
+            name: newColor.name,
+            hex: newColor.hex,
+            addon_price: newColor.priceModifier || 0
+          }
+        ];
+        
+        // Return the material with updated colors
+        return {
+          ...material,
+          colors: updatedColors
+        };
+      });
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        // Update local state
+        setColors([...colors, newColorItem]);
+        setNewColor({ name: "", hex: "#000000", priceModifier: 0 });
+        alert("Color added successfully!");
+      } else {
+        alert(`Failed to add color: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error adding color:", error);
+      alert("Failed to add color. Please try again.");
     }
-
-    setColors([...colors, newColorItem])
-    setNewColor({ name: "", hex: "#000000", priceModifier: 0 })
-
-    // In a real app, you would save to your backend here
   }
 
+  // Load colors from the backend
+  useEffect(() => {
+    const loadColors = async () => {
+      try {
+        const data = await getMaterials();
+        
+        if (data && data.materials && data.materials.length > 0) {
+          // Get colors from the first material (assuming all materials have the same colors)
+          const firstMaterial = data.materials[0];
+          
+          if (firstMaterial.colors) {
+            // Map backend colors to our component's format
+            const mappedColors = firstMaterial.colors.map((color: any) => ({
+              id: color.id,
+              name: color.name,
+              hex: color.hex,
+              priceModifier: color.addon_price || 0
+            }));
+            
+            setColors(mappedColors);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading colors:", error);
+        alert("Failed to load colors from the backend.");
+      }
+    };
+    
+    loadColors();
+  }, []);
+  
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -223,4 +372,3 @@ export function AdminColorManager() {
     </div>
   )
 }
-

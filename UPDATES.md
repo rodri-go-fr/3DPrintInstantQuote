@@ -1,94 +1,142 @@
-# Updates to 3D Print Instant Quote
+# Updates and Integration Guide
 
-## Cross-Platform Compatibility Improvements
+## March 2025 Updates
 
-The following changes have been made to improve cross-platform compatibility:
+### Client-Side 3D Model Rendering
 
-1. **Fixed Tailwind CSS Configuration**:
-   - Updated `globals.css` to use proper Tailwind directives
-   - Fixed PostCSS configuration in `postcss.config.mjs`
+The frontend has been updated to support client-side 3D model rendering:
 
-2. **Environment-Aware Startup Scripts**:
-   - Created platform-specific scripts for both frontend and backend
-   - Added auto-detection of the environment (Linux, Windows, WSL)
-   - Eliminated dependency on Make for Windows users
+- Added STL file rendering using Three.js STLLoader
+- Implemented client-side model conversion and normalization
+- Added fallback model display for unsupported formats
+- Improved error handling for model loading failures
 
-3. **Fixed Backend Docker Issues**:
-   - Updated Dockerfile to use a Python virtual environment
-   - Fixed the "externally-managed-environment" error
-   - Added verbose logging for easier debugging
+### UI and UX Improvements
 
-4. **Case-Sensitive Path Fix**:
-   - Fixed the volume mapping in `docker-compose.yml` to use the correct case-sensitive path
+- Updated the model viewer component to handle various file formats
+- Fixed container styling in Tailwind configuration
+- Hidden print details in the quote page to focus on price information
+- Improved error handling throughout the application
 
-## How to Run
+### Bug Fixes
 
-### All-in-One Startup
+- Fixed cart functionality to handle null/undefined prices
+- Fixed error in cart-icon.tsx when displaying items with missing prices
+- Fixed price calculation in quote page to properly apply modifiers
+- Fixed NaN values in unit price display
+- Fixed "Add to Cart" button to work with free items (price = 0)
+- Fixed TypeScript errors with null jobId values
+- Improved model viewer error handling
+- Fixed styling issues with container class
+- Fixed admin pricing manager to save settings to backend
+- Fixed quality modifiers to be loaded from backend settings
 
-To start both backend and frontend with a single command:
+### UI Improvements
 
-**Linux/macOS:**
-```bash
-./start-all.sh
+- Added loading state to model viewer to indicate when models are being converted
+- Improved model viewer to check file availability before displaying
+- Added automatic retry mechanism for model loading
+- Changed Print Quality selector to use a collapsible component as originally designed
+- Added support for OBJ file format in the model viewer
+- Added note about 3MF support (requires server-side conversion)
+
+## Frontend-Backend Integration
+
+The frontend has been updated to connect to the backend API for real-time 3D model processing and quote generation. Here's what has been implemented:
+
+### API Service Layer
+
+A new API service layer has been created in `frontend/services/api.ts` that provides functions for:
+- Uploading 3D models to the backend
+- Fetching job status and results
+- Getting materials and colors from the backend
+- Submitting orders
+
+
+### File Upload Integration
+
+The file uploader component now uploads files directly to the backend API and tracks the upload progress. After uploading, it stores the job ID in session storage for tracking throughout the application.
+
+### Real-time Quote Generation
+
+The quote page now fetches real pricing information from the backend based on:
+- Actual material usage calculated by PrusaSlicer
+- Estimated print time
+- Selected material and color options
+- Quality settings
+
+### Environment Configuration
+
+A `.env.local` file has been added to configure the API URL for different environments:
+- Local development: http://localhost:5000
+- Cloudflare Tunnel: https://your-subdomain.your-domain.com/api
+- Linode deployment: https://your-linode-ip-or-domain.com/api
+
+## Deployment Options
+
+### Local Development with Cloudflare Tunnel
+
+1. Start the backend and frontend:
+   ```bash
+   ./start-all.sh
+   ```
+
+2. Set up a Cloudflare tunnel:
+   ```bash
+   cloudflared tunnel create 3dprintquote
+   cloudflared tunnel route dns 3dprintquote your-subdomain.your-domain.com
+   cloudflared tunnel run --url http://localhost:3000 3dprintquote
+   ```
+
+3. Update the `.env.local` file to use your Cloudflare tunnel URL.
+
+### Linode Deployment
+
+1. Set up a Linode server with Docker and Docker Compose.
+
+2. Clone the repository and start the application:
+   ```bash
+   git clone <repository-url>
+   cd 3DPrintInstantQuote
+   ./start-all.sh
+   ```
+
+3. Update the `.env.local` file to use your Linode server's IP or domain.
+
+## Configuration
+
+### Backend API URL
+
+The backend API URL is configured in the `.env.local` file. Update this file to match your deployment environment:
+
 ```
+# For local development
+NEXT_PUBLIC_API_URL=http://localhost:5000
 
-**Windows:**
+# For Cloudflare Tunnel
+# NEXT_PUBLIC_API_URL=https://your-subdomain.your-domain.com/api
+
+# For Linode deployment
+# NEXT_PUBLIC_API_URL=https://your-linode-ip-or-domain.com/api
 ```
-start-all.bat
-```
-
-### Backend Only
-
-**Linux/macOS:**
-```bash
-./start-backend.sh
-```
-
-**Windows:**
-```
-windows-backend.bat
-```
-
-### Frontend Only
-
-**Linux/macOS:**
-```bash
-./start-frontend.sh
-```
-
-**Windows:**
-```
-windows-frontend.bat
-```
-
-### For WSL Users
-
-If you're using WSL:
-1. Run the backend in WSL: `./wsl-backend.sh`
-2. Run the frontend in Windows: `start-frontend.bat`
 
 ## Troubleshooting
 
-If you encounter any issues:
+### CORS Issues
 
-1. Check the Docker logs for detailed error messages:
+If you encounter CORS issues when connecting to the backend, make sure the backend's CORS configuration allows requests from your frontend's origin. The backend already has CORS enabled, but you may need to update the allowed origins.
+
+### API Connection Issues
+
+If the frontend cannot connect to the backend API:
+
+1. Check that the backend server is running:
    ```bash
-   docker logs prusa-slicer-container
+   docker ps
    ```
 
-2. If the Docker container fails to build, try running with verbose output:
-   ```bash
-   docker compose up --build
-   ```
+2. Verify the API URL in `.env.local` is correct.
 
-3. For frontend issues, make sure Tailwind CSS is properly installed:
-   ```bash
-   cd frontend
-   npm install tailwindcss postcss autoprefixer
-   ```
+3. Check the browser console for any error messages.
 
-4. If you're using WSL, make sure Docker is properly installed and running:
-   ```bash
-   sudo service docker status
-   sudo service docker start  # if not running
-   ```
+4. Try accessing the API directly in your browser (e.g., http://localhost:5000/api/materials) to verify it's responding.

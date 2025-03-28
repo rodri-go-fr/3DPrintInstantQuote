@@ -4,6 +4,7 @@ import re
 import json
 import os
 import traceback
+import shutil
 
 # Enable debug mode? (1 = on, 0 = off)
 DEBUG = 1
@@ -29,6 +30,20 @@ try:
     MODEL_FILE = "/app/shared/" + filename  # STL/3MF file path
     GCODE_FILE = os.path.splitext(MODEL_FILE)[0] + ".gcode"
     PROFILE_FILE = "/app/shared/prusaslicer-config/x1c.ini"
+    
+    # Check if the file exists and is accessible
+    if not os.path.exists(MODEL_FILE):
+        debug_print(f"Model file not found: {MODEL_FILE}")
+        # Check if there's a converted version (for 3MF files that were converted to STL)
+        original_base = os.path.splitext(MODEL_FILE)[0]
+        potential_stl = original_base + ".stl"
+        if os.path.exists(potential_stl):
+            debug_print(f"Found converted STL file: {potential_stl}")
+            MODEL_FILE = potential_stl
+            GCODE_FILE = os.path.splitext(MODEL_FILE)[0] + ".gcode"
+        else:
+            print(json.dumps({"error": f"File not found: {MODEL_FILE}"}))
+            sys.exit(1)
 
     # Get optional arguments
     FILL_DENSITY = sys.argv[2] if len(sys.argv) > 2 else "0.15" 

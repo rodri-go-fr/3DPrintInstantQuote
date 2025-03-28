@@ -1,7 +1,7 @@
 # 3D Print Instant Quote
 
 ## Overview
-This project provides a comprehensive system for 3D printing quotes. Users can upload 3D model files (STL, 3MF), preview them in 3D, select materials and colors, and receive instant quotes based on material usage, print time, and other parameters. The backend runs **PrusaSlicer CLI** inside a **Docker container**, and the frontend is built with **Next.js**.
+This project provides a comprehensive system for 3D printing quotes. Users can upload 3D model files (STL, 3MF), preview them in 3D, select materials and colors, and receive instant quotes based on material usage, print time, and other parameters. The backend runs **PrusaSlicer CLI** inside a **Docker container**, and the frontend is built with **Next.js**. The system can be deployed locally with a Cloudflare tunnel or on a Linode server.
 
 ## Features
 - Upload STL/3MF files through a modern web interface with drag-and-drop
@@ -24,6 +24,7 @@ This project provides a comprehensive system for 3D printing quotes. Users can u
 │── frontend/               # Frontend (Next.js)
 │   ├── app/                # Next.js app directory
 │   │   ├── components/     # React components
+│   │   ├── services/       # API services for backend communication
 │   │   ├── utils/          # Utility functions
 │   │   ├── types/          # TypeScript type definitions
 │   │   ├── admin/          # Admin panel pages
@@ -35,6 +36,15 @@ This project provides a comprehensive system for 3D printing quotes. Users can u
 │── README.md               # Project documentation
 │── Makefile                # Build and run commands
 │── start.sh                # Startup script
+│── start-all.sh            # Script to start both frontend and backend
+│── start-backend.sh        # Script to start backend only
+│── start-frontend.sh       # Script to start frontend only
+│── linux-backend.sh        # Linux-specific backend startup
+│── linux-frontend.sh       # Linux-specific frontend startup
+│── windows-backend.bat     # Windows-specific backend startup
+│── windows-frontend.bat    # Windows-specific frontend startup
+│── wsl-backend.sh          # WSL-specific backend startup
+│── wsl-frontend.sh         # WSL-specific frontend startup
 ```
 
 ## Prerequisites
@@ -112,10 +122,12 @@ The project includes a Makefile with several useful commands:
 
 The frontend (Next.js) allows users to:
 - Upload 3D model files with drag-and-drop functionality
-- Preview models in 3D with interactive controls
+- Preview models in 3D with interactive controls (supports STL, 3MF, and other formats)
+- Client-side 3D model conversion and rendering
 - Select materials and colors with real-time preview
 - Adjust print settings (fill density, supports)
-- Receive detailed quotes with price breakdown
+- Receive detailed quotes with price breakdown based on actual material usage and print time
+- Add items to cart and proceed to checkout
 - Submit print requests for approval
 
 The admin panel allows administrators to:
@@ -123,6 +135,53 @@ The admin panel allows administrators to:
 - Add, edit, and remove colors with custom pricing
 - Review and approve/reject print jobs
 - View detailed job information and pricing
+
+## Deployment Options
+
+### Local Deployment with Cloudflare Tunnel
+
+For local development or small-scale deployment, you can run the application locally and expose it to the internet using a Cloudflare tunnel:
+
+1. Start the backend and frontend:
+   ```bash
+   ./start-all.sh
+   ```
+
+2. Set up a Cloudflare tunnel to expose your local server to the internet:
+   ```bash
+   cloudflared tunnel create 3dprintquote
+   cloudflared tunnel route dns 3dprintquote your-subdomain.your-domain.com
+   cloudflared tunnel run --url http://localhost:3000 3dprintquote
+   ```
+
+### Linode Deployment
+
+For production deployment, you can host the application on a Linode server:
+
+1. Set up a Linode server with Docker and Docker Compose installed.
+
+2. Clone the repository to your Linode server:
+   ```bash
+   git clone <repository-url>
+   cd 3DPrintInstantQuote
+   ```
+
+3. Start the application:
+   ```bash
+   ./start-all.sh
+   ```
+
+4. Configure your domain to point to your Linode server's IP address.
+
+## Recent Updates
+
+### March 2025 Updates
+- Added client-side STL file rendering using Three.js STLLoader
+- Improved model viewer with better error handling and fallback models
+- Fixed cart functionality to handle null/undefined prices
+- Updated UI to hide print details and focus on price information
+- Fixed container styling in Tailwind configuration
+- Improved error handling throughout the application
 
 ## Troubleshooting
 

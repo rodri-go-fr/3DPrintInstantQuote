@@ -15,10 +15,14 @@ CORS(app)  # Enable CORS for all routes
 
 # Configuration
 UPLOAD_FOLDER = "/app/shared"  # This should match the UserModels/ directory in Docker
-ALLOWED_EXTENSIONS = {'stl', '3mf'}
+ALLOWED_EXTENSIONS = {'stl', '3mf', 'obj'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB max file size
 MATERIALS_FILE = os.path.join(UPLOAD_FOLDER, "materials.json")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Temporary directory for file conversions
+TEMP_DIR = os.path.join(UPLOAD_FOLDER, "temp")
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 # Default materials and pricing if no file exists
 DEFAULT_MATERIALS = {
@@ -130,6 +134,29 @@ processing_lock = threading.Lock()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def convert_3mf_to_stl(input_file_path):
+    """Convert a 3MF file to STL format using PrusaSlicer"""
+    try:
+        # Generate output file path with .stl extension
+        output_file_path = os.path.splitext(input_file_path)[0] + ".stl"
+        
+        # Use PrusaSlicer to convert the file
+        # The --export-stl command exports the model as STL
+        result = subprocess.run(
+            ["prusa-slicer", "--export-stl", input_file_path, "--output", output_file_path],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            print(f"Error converting 3MF to STL: {result.stderr}", file=sys.stderr)
+            return None
+        
+        return output_file_path
+    except Exception as e:
+        print(f"Exception during 3MF conversion: {str(e)}", file=sys.stderr)
+        return None
+
 def parse_time_string(time_str):
     """Convert time string like '2d 3h 45m 30s' to hours as float"""
     total_seconds = 0
@@ -151,11 +178,12 @@ def parse_time_string(time_str):
     
     return total_seconds / 3600  # Convert to hours
 
-def calculate_price(material_id, color_id, filament_used_g, print_time, has_supports):
-    """Calculate price based on material, color, filament usage and print time"""
+def calculate_price(material_id, color_id, filament_used_g, print_time, has_supports, quality_id=None, volume_cm3=None):
+    """Calculate price based on material, color, filament usage, print time, and quality"""
     try:
-        materials = get_materials()["materials"]
-        global_settings = get_materials()["global_settings"]
+        materials_data = get_materials()
+        materials = materials_data["materials"]
+        global_settings = materials_data["global_settings"]
         
         # Find the material
         material = next((m for m in materials if m["id"] == material_id), None)
@@ -177,22 +205,46 @@ def calculate_price(material_id, color_id, filament_used_g, print_time, has_supp
         # Calculate time cost
         time_cost = parse_time_string(print_time) * material["hourly_rate"]
         
-        # Add color addon price
+        # Calculate prusa-generated cost (material + time)
+        prusa_cost = material_cost + time_cost
+        
+        # Get minimum price from settings
+        minimum_price = global_settings["minimum_price"]
+        
+        # Base price is the higher of prusa cost or minimum price
+        base_price = max(prusa_cost, minimum_price)
+        
+        # Apply markup to base price
+        markup_percentage = global_settings.get("markup_percentage", 30)
+        markup = markup_percentage / 100
+        base_price_with_markup = base_price * (1 + markup)
+        
+        # Get modifiers
         color_addon = color["addon_price"]
+        material_modifier = material.get("priceModifier", 0)
         
-        # Calculate total price
-        total_price = material_cost + time_cost + color_addon
+        # Get quality modifier
+        quality_modifier = 0
+        if quality_id and "quality_levels" in global_settings:
+            quality_level = next((q for q in global_settings["quality_levels"] if q["id"] == quality_id), None)
+            if quality_level:
+                quality_modifier = quality_level.get("price_modifier", 0)
         
-        # Apply minimum price
-        total_price = max(total_price, global_settings["minimum_price"])
+        # Calculate total price by adding modifiers to base price with markup
+        total_price = base_price_with_markup + color_addon + material_modifier + quality_modifier
         
         return {
+            "base_price": round(base_price, 2),
+            "base_price_with_markup": round(base_price_with_markup, 2),
             "material_cost": round(material_cost, 2),
             "time_cost": round(time_cost, 2),
             "color_addon": round(color_addon, 2),
+            "material_modifier": round(material_modifier, 2),
+            "quality_modifier": round(quality_modifier, 2),
             "total_price": round(total_price, 2)
         }
     except Exception as e:
+        print(f"Error in price calculation: {str(e)}")
         return {"error": str(e)}
 
 def get_materials():
@@ -254,7 +306,9 @@ def process_jobs():
                                 job["color_id"],
                                 slice_result["filament_used_g"],
                                 slice_result["estimated_time"],
-                                job.get("enable_supports", True)
+                                job.get("enable_supports", True),
+                                job.get("quality_id", "standard"),
+                                slice_result.get("volume_cm3")
                             )
                             
                             jobs[job_id]["status"] = "completed"
@@ -305,10 +359,21 @@ def upload_file():
     # Save the file
     file.save(file_path)
     
+    # If the file is a 3MF, convert it to STL
+    converted_file_path = None
+    if file_path.lower().endswith('.3mf'):
+        converted_file_path = convert_3mf_to_stl(file_path)
+        if converted_file_path:
+            # Update the filename to use the converted STL file
+            unique_filename = os.path.basename(converted_file_path)
+        else:
+            return jsonify({"error": "Failed to convert 3MF file to STL"}), 500
+    
     # Create a job
     job_id = str(uuid.uuid4())
     material_id = request.form.get("material_id", "pla")
     color_id = request.form.get("color_id", "white")
+    quality_id = request.form.get("quality_id", "standard")
     fill_density = float(request.form.get("fill_density", get_materials()["global_settings"]["default_fill_density"]))
     enable_supports = request.form.get("enable_supports", "true").lower() == "true"
     
@@ -320,6 +385,7 @@ def upload_file():
         "created_at": time.time(),
         "material_id": material_id,
         "color_id": color_id,
+        "quality_id": quality_id,
         "fill_density": fill_density,
         "enable_supports": enable_supports
     }

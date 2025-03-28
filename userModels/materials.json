@@ -1,110 +1,143 @@
 {
   "materials": [
     {
+      "base_cost_per_gram": 0.05,
+      "colors": [
+        {
+          "addon_price": 0,
+          "hex": "#FFFFFF",
+          "id": "white",
+          "name": "White"
+        },
+        {
+          "addon_price": 0,
+          "hex": "#000000",
+          "id": "black",
+          "name": "Black"
+        },
+        {
+          "addon_price": 0,
+          "hex": "#FF0000",
+          "id": "red",
+          "name": "Red"
+        },
+        {
+          "addon_price": 0,
+          "hex": "#0000FF",
+          "id": "blue",
+          "name": "Blue"
+        },
+        {
+          "addon_price": 2,
+          "hex": "#FFD700",
+          "id": "gold",
+          "name": "Gold"
+        }
+      ],
+      "description": "Standard material, good for most prints",
+      "hourly_rate": 2,
       "id": "pla",
       "name": "PLA",
-      "description": "Standard material, good for most prints",
       "properties": [
         "Simple",
         "Indoor use"
-      ],
-      "base_cost_per_gram": 0.05,
-      "hourly_rate": 2.0,
-      "colors": [
-        {
-          "id": "white",
-          "name": "White",
-          "hex": "#FFFFFF",
-          "addon_price": 0.0
-        },
-        {
-          "id": "black",
-          "name": "Black",
-          "hex": "#000000",
-          "addon_price": 0.0
-        },
-        {
-          "id": "red",
-          "name": "Red",
-          "hex": "#FF0000",
-          "addon_price": 0.0
-        },
-        {
-          "id": "blue",
-          "name": "Blue",
-          "hex": "#0000FF",
-          "addon_price": 0.0
-        },
-        {
-          "id": "gold",
-          "name": "Gold",
-          "hex": "#FFD700",
-          "addon_price": 2.0
-        }
       ]
     },
     {
+      "base_cost_per_gram": 0.07,
+      "colors": [
+        {
+          "addon_price": 0,
+          "hex": "#FFFFFF",
+          "id": "white",
+          "name": "White"
+        },
+        {
+          "addon_price": 0,
+          "hex": "#000000",
+          "id": "black",
+          "name": "Black"
+        },
+        {
+          "addon_price": 1,
+          "hex": "#E0F7FA",
+          "id": "clear",
+          "name": "Clear"
+        }
+      ],
+      "description": "Durable material, suitable for outdoor use",
+      "hourly_rate": 2.5,
       "id": "petg",
       "name": "PETG",
-      "description": "Durable material, suitable for outdoor use",
       "properties": [
         "Durable",
         "Outdoor",
         "Water-resistant"
-      ],
-      "base_cost_per_gram": 0.07,
-      "hourly_rate": 2.5,
-      "colors": [
-        {
-          "id": "white",
-          "name": "White",
-          "hex": "#FFFFFF",
-          "addon_price": 0.0
-        },
-        {
-          "id": "black",
-          "name": "Black",
-          "hex": "#000000",
-          "addon_price": 0.0
-        },
-        {
-          "id": "clear",
-          "name": "Clear",
-          "hex": "#E0F7FA",
-          "addon_price": 1.0
-        }
       ]
     },
     {
+      "base_cost_per_gram": 0.08,
+      "colors": [
+        {
+          "addon_price": 0,
+          "hex": "#FFFFFF",
+          "id": "white",
+          "name": "White"
+        },
+        {
+          "addon_price": 0,
+          "hex": "#000000",
+          "id": "black",
+          "name": "Black"
+        }
+      ],
+      "description": "Rigid material, good for mechanical parts",
+      "hourly_rate": 3,
       "id": "abs",
       "name": "ABS",
-      "description": "Rigid material, good for mechanical parts",
       "properties": [
         "Rigid",
         "Heat-resistant",
         "Durable"
-      ],
-      "base_cost_per_gram": 0.08,
-      "hourly_rate": 3.0,
-      "colors": [
-        {
-          "id": "white",
-          "name": "White",
-          "hex": "#FFFFFF",
-          "addon_price": 0.0
-        },
-        {
-          "id": "black",
-          "name": "Black",
-          "hex": "#000000",
-          "addon_price": 0.0
-        }
       ]
     }
   ],
   "global_settings": {
+    "default_fill_density": 0.15,
+    "markup_percentage": 30,
+    "minimum_price": 5,
+    "quality_levels": [
+      {
+        "id": "draft",
+        "name": "Draft",
+        "layer_height": "0.3mm",
+        "description": "Faster printing with visible layer lines. Good for prototypes and non-visible parts.",
+        "price_modifier": -5
+      },
+      {
+        "id": "standard",
+        "name": "Standard",
+        "layer_height": "0.2mm",
+        "description": "Balanced quality and print time. Suitable for most applications.",
+        "price_modifier": 0
+      },
+      {
+        "id": "high",
+        "name": "High Quality",
+        "layer_height": "0.12mm",
+        "description": "Finer details with less visible layer lines. Recommended for display pieces.",
+        "price_modifier": 10
+      },
+      {
+        "id": "ultra",
+        "name": "Ultra Fine",
+        "layer_height": "0.08mm",
+        "description": "Maximum detail resolution with minimal layer lines. Best for intricate models.",
+        "price_modifier": 15
+      }
+    ],
+    "rush_order_fee": 15,
     "support_material_multiplier": 1.2,
-    "minimum_price": 5.0,
-    "default_fill_density": 0.15
+    "volume_multiplier": 0.15
   }
 }

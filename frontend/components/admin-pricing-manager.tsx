@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMaterials, updateMaterials } from "@/services/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -104,9 +105,72 @@ export function AdminPricingManager() {
     setQualityLevels(updatedLevels)
   }
 
-  const handleSave = () => {
-    // In a real app, you would save to your backend here
-    alert("Pricing settings saved!")
+  // Load existing settings from the backend
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const materialsData = await getMaterials();
+        
+        // Update quality levels if available
+        if (materialsData.global_settings) {
+          // You might need to map the backend data to your local state format
+          // This is a simplified example
+          setSettings({
+            basePrice: materialsData.global_settings.minimum_price || 25,
+            volumeMultiplier: 0.15, // Adjust based on your backend data structure
+            markupPercentage: 30, // Adjust based on your backend data structure
+            rushOrderFee: 15, // Adjust based on your backend data structure
+          });
+        }
+      } catch (error) {
+        console.error("Error loading pricing settings:", error);
+        alert("Failed to load pricing settings from the backend.");
+      }
+    };
+    
+    loadSettings();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      // First, get the current materials data to preserve existing materials
+      const currentData = await getMaterials();
+      
+      // Prepare the data in the format expected by the backend
+      const materialsData = {
+        materials: currentData.materials || [], // Preserve existing materials
+        global_settings: {
+          // Preserve any existing settings not managed by this component
+          ...currentData.global_settings,
+          // Update the settings managed by this component
+          minimum_price: settings.basePrice,
+          support_material_multiplier: currentData.global_settings?.support_material_multiplier || 1.5,
+          default_fill_density: currentData.global_settings?.default_fill_density || 20,
+          volume_multiplier: settings.volumeMultiplier,
+          markup_percentage: settings.markupPercentage,
+          rush_order_fee: settings.rushOrderFee,
+          quality_levels: qualityLevels.map(level => ({
+            id: level.id,
+            name: level.name,
+            layer_height: level.layerHeight,
+            description: level.description,
+            price_modifier: level.priceModifier
+          }))
+        }
+      };
+      
+      // Send the data to the backend
+      const result = await updateMaterials(materialsData);
+      
+      if (result.success) {
+        alert("Pricing settings saved successfully!");
+      } else {
+        alert(`Failed to save pricing settings: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error saving pricing settings:", error);
+      alert("Failed to save pricing settings to the backend.");
+    }
   }
 
   return (
@@ -310,43 +374,31 @@ export function AdminPricingManager() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="p-4 bg-muted rounded-md font-mono text-sm">
-              <p>Base Price: ${settings.basePrice.toFixed(2)}</p>
-              <p>+ (Volume × ${settings.volumeMultiplier.toFixed(2)}/cm³)</p>
-              <p>+ Material Price Modifier</p>
-              <p>+ Color Price Modifier</p>
-              <p>+ Quality Price Modifier</p>
-              <p>= Subtotal</p>
-              <p>× (1 + {settings.markupPercentage}% Markup)</p>
-              <p>= Final Price</p>
-            </div>
+          <div className="p-4 bg-muted rounded-md font-mono text-sm">
+            <p>Base Price = max($${settings.basePrice.toFixed(2)}, Prusa Cost)</p>
+            <p>× (1 + {settings.markupPercentage}% Markup)</p>
+            <p>+ Material Price Modifier</p>
+            <p>+ Color Price Modifier</p>
+            <p>+ Quality Price Modifier</p>
+            <p>= Unit Price</p>
+          </div>
 
-            <div className="p-4 bg-muted/50 rounded-md">
-              <h4 className="font-medium mb-2">Example Calculation:</h4>
-              <p className="text-sm">
-                For a 100cm³ model with standard PLA (no modifier), red color (+$5), and high quality (+$10):
+          <div className="p-4 bg-muted/50 rounded-md">
+            <h4 className="font-medium mb-2">Example Calculation:</h4>
+            <p className="text-sm">
+              For a model with Prusa cost of $8.00, standard PLA (no modifier), red color (+$5), and high quality (+$10):
+            </p>
+            <div className="mt-2 space-y-1 text-sm">
+              <p>Base Price = max($${settings.basePrice.toFixed(2)}, $8.00) = $8.00</p>
+              <p>× ${(1 + settings.markupPercentage / 100).toFixed(2)} (markup) = $${(8 * (1 + settings.markupPercentage / 100)).toFixed(2)}</p>
+              <p>+ $0.00 (standard PLA)</p>
+              <p>+ $5.00 (red color)</p>
+              <p>+ $10.00 (high quality)</p>
+              <p className="font-medium">
+                = $${(8 * (1 + settings.markupPercentage / 100) + 5 + 10).toFixed(2)} (unit price)
               </p>
-              <div className="mt-2 space-y-1 text-sm">
-                <p>${settings.basePrice.toFixed(2)} (base price)</p>
-                <p>
-                  + $${(100 * settings.volumeMultiplier).toFixed(2)} (100cm³ × ${settings.volumeMultiplier.toFixed(2)}
-                  /cm³)
-                </p>
-                <p>+ $0.00 (standard PLA)</p>
-                <p>+ $5.00 (red color)</p>
-                <p>+ $10.00 (high quality)</p>
-                <p>= $${(settings.basePrice + 100 * settings.volumeMultiplier + 5 + 10).toFixed(2)} (subtotal)</p>
-                <p>× ${(1 + settings.markupPercentage / 100).toFixed(2)} (markup)</p>
-                <p className="font-medium">
-                  = $$
-                  {(
-                    (settings.basePrice + 100 * settings.volumeMultiplier + 5 + 10) *
-                    (1 + settings.markupPercentage / 100)
-                  ).toFixed(2)}{" "}
-                  (final price)
-                </p>
-              </div>
             </div>
+          </div>
           </div>
 
           <div className="pt-4">
@@ -360,4 +412,3 @@ export function AdminPricingManager() {
     </div>
   )
 }
-

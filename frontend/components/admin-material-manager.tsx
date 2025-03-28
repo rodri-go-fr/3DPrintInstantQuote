@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getMaterials, updateMaterials } from "@/services/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -77,18 +78,83 @@ export function AdminMaterialManager() {
     setExpandedId(id)
   }
 
-  const handleSave = (id: string) => {
-    setEditingId(null)
-    // In a real app, you would save to your backend here
+  const handleSave = async (id: string) => {
+    try {
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Find the material to update
+      const updatedMaterials = currentData.materials.map((material: any) => {
+        if (material.id === id) {
+          // Find the material in our local state
+          const updatedMaterial = materials.find(m => m.id === id);
+          if (!updatedMaterial) return material;
+          
+          // Update the material properties
+          return {
+            ...material,
+            name: updatedMaterial.name,
+            description: updatedMaterial.description,
+            priceModifier: updatedMaterial.priceModifier,
+            // Keep other properties that might exist in the backend
+            base_cost_per_gram: material.base_cost_per_gram,
+            hourly_rate: material.hourly_rate,
+            properties: material.properties,
+            colors: material.colors,
+            // Update available colors based on our local state
+            availableColors: updatedMaterial.availableColors
+          };
+        }
+        return material;
+      });
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        alert("Material updated successfully!");
+        setEditingId(null);
+      } else {
+        alert(`Failed to update material: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error updating material:", error);
+      alert("Failed to update material. Please try again.");
+    }
   }
 
   const handleCancel = () => {
     setEditingId(null)
   }
 
-  const handleDelete = (id: string) => {
-    setMaterials(materials.filter((material) => material.id !== id))
-    // In a real app, you would delete from your backend here
+  const handleDelete = async (id: string) => {
+    try {
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Filter out the material to delete
+      const updatedMaterials = currentData.materials.filter((material: any) => material.id !== id);
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        // Update local state
+        setMaterials(materials.filter((material) => material.id !== id));
+        alert("Material deleted successfully!");
+      } else {
+        alert(`Failed to delete material: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error deleting material:", error);
+      alert("Failed to delete material. Please try again.");
+    }
   }
 
   const handleChange = (id: string, field: keyof MaterialItem, value: string | number | string[]) => {
@@ -106,22 +172,64 @@ export function AdminMaterialManager() {
     setNewMaterial({ ...newMaterial, [field]: value })
   }
 
-  const handleAddMaterial = () => {
+  const handleAddMaterial = async () => {
     if (!newMaterial.name) return
 
-    const id = newMaterial.name.split("(")[0].trim().toUpperCase()
-    const newMaterialItem: MaterialItem = {
-      id,
-      name: newMaterial.name,
-      description: newMaterial.description || "",
-      priceModifier: newMaterial.priceModifier || 0,
-      availableColors: newMaterial.availableColors || [],
+    try {
+      // Generate ID from name
+      const id = newMaterial.name.split("(")[0].trim().toUpperCase();
+      
+      // Create new material item
+      const newMaterialItem: MaterialItem = {
+        id,
+        name: newMaterial.name,
+        description: newMaterial.description || "",
+        priceModifier: newMaterial.priceModifier || 0,
+        availableColors: newMaterial.availableColors || [],
+      };
+      
+      // Get current materials data
+      const currentData = await getMaterials();
+      
+      // Add the new material
+      const updatedMaterials = [
+        ...currentData.materials,
+        {
+          id,
+          name: newMaterial.name,
+          description: newMaterial.description || "",
+          base_cost_per_gram: 0.05, // Default value
+          hourly_rate: 2.0, // Default value
+          properties: ["New material"],
+          colors: AVAILABLE_COLORS.filter(color => 
+            (newMaterial.availableColors || []).includes(color.hex)
+          ).map(color => ({
+            id: color.id,
+            name: color.name,
+            hex: color.hex,
+            addon_price: 0.0 // Default value
+          }))
+        }
+      ];
+      
+      // Update the materials in the backend
+      const result = await updateMaterials({
+        ...currentData,
+        materials: updatedMaterials
+      });
+      
+      if (result.success) {
+        // Update local state
+        setMaterials([...materials, newMaterialItem]);
+        setNewMaterial({ name: "", description: "", priceModifier: 0, availableColors: [] });
+        alert("Material added successfully!");
+      } else {
+        alert(`Failed to add material: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error adding material:", error);
+      alert("Failed to add material. Please try again.");
     }
-
-    setMaterials([...materials, newMaterialItem])
-    setNewMaterial({ name: "", description: "", priceModifier: 0, availableColors: [] })
-
-    // In a real app, you would save to your backend here
   }
 
   const toggleColorForMaterial = (materialId: string, colorHex: string) => {
@@ -161,6 +269,33 @@ export function AdminMaterialManager() {
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id)
   }
+  
+  // Load materials from the backend
+  useEffect(() => {
+    const loadMaterials = async () => {
+      try {
+        const data = await getMaterials();
+        
+        if (data && data.materials) {
+          // Map backend materials to our component's format
+          const mappedMaterials = data.materials.map((material: any) => ({
+            id: material.id,
+            name: material.name,
+            description: material.description || "",
+            priceModifier: material.priceModifier || 0,
+            availableColors: material.colors ? material.colors.map((color: any) => color.hex) : []
+          }));
+          
+          setMaterials(mappedMaterials);
+        }
+      } catch (error) {
+        console.error("Error loading materials:", error);
+        alert("Failed to load materials from the backend.");
+      }
+    };
+    
+    loadMaterials();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -397,4 +532,3 @@ export function AdminMaterialManager() {
     </div>
   )
 }
-
