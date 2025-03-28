@@ -8,52 +8,87 @@ The following changes have been made to improve cross-platform compatibility:
    - Updated `globals.css` to use proper Tailwind directives
    - Fixed PostCSS configuration in `postcss.config.mjs`
 
-2. **Environment-Aware Frontend Startup**:
-   - Created a new `start-frontend.sh` script that auto-detects the environment (Linux, Windows, WSL)
-   - Updated the Makefile to use this script
-   - For WSL users, the script provides instructions to run the frontend directly on Windows
+2. **Environment-Aware Startup Scripts**:
+   - Created platform-specific scripts for both frontend and backend
+   - Added auto-detection of the environment (Linux, Windows, WSL)
+   - Eliminated dependency on Make for Windows users
 
-3. **Case-Sensitive Path Fix**:
+3. **Fixed Backend Docker Issues**:
+   - Updated Dockerfile to use a Python virtual environment
+   - Fixed the "externally-managed-environment" error
+   - Added verbose logging for easier debugging
+
+4. **Case-Sensitive Path Fix**:
    - Fixed the volume mapping in `docker-compose.yml` to use the correct case-sensitive path
 
 ## How to Run
 
-### Backend
+### All-in-One Startup
 
+To start both backend and frontend with a single command:
+
+**Linux/macOS:**
 ```bash
-make backend
+./start-all.sh
 ```
 
-### Frontend
-
-```bash
-make frontend
+**Windows:**
+```
+start-all.bat
 ```
 
-This will auto-detect your environment and run the appropriate command.
+### Backend Only
+
+**Linux/macOS:**
+```bash
+./start-backend.sh
+```
+
+**Windows:**
+```
+windows-backend.bat
+```
+
+### Frontend Only
+
+**Linux/macOS:**
+```bash
+./start-frontend.sh
+```
+
+**Windows:**
+```
+windows-frontend.bat
+```
 
 ### For WSL Users
 
-If you're using WSL, the `make frontend` command will detect this and provide instructions to run the frontend directly on Windows. You should open a Windows command prompt and run the command provided by the script.
-
-Alternatively, you can use the provided Windows batch file:
-```
-start-frontend.bat
-```
+If you're using WSL:
+1. Run the backend in WSL: `./wsl-backend.sh`
+2. Run the frontend in Windows: `start-frontend.bat`
 
 ## Troubleshooting
 
 If you encounter any issues:
 
-1. Make sure all dependencies are installed:
+1. Check the Docker logs for detailed error messages:
    ```bash
-   make install
+   docker logs prusa-slicer-container
    ```
 
-2. If you're using WSL, try running the frontend directly on Windows as instructed by the script.
+2. If the Docker container fails to build, try running with verbose output:
+   ```bash
+   docker compose up --build
+   ```
 
-3. If you're still having issues, you can manually install Tailwind CSS:
+3. For frontend issues, make sure Tailwind CSS is properly installed:
    ```bash
    cd frontend
    npm install tailwindcss postcss autoprefixer
+   ```
+
+4. If you're using WSL, make sure Docker is properly installed and running:
+   ```bash
+   sudo service docker status
+   sudo service docker start  # if not running
    ```
