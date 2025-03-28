@@ -9,7 +9,7 @@ I am building a **self-hosted 3D print submission system** that allows users to:
 1. **Upload STL files via a web UI**
 2. **Receive an instant quote** based on material usage and print time
 3. **Manually approve jobs** before printing
-4. **Securely expose the system via Cloudflare Tunnel**
+4. **Securely expose the system via Cloudflare Tunnel which may be migrated to a linode system**
 5. **Queue slicing jobs** to prevent overload
 6. **Provide security against malicious file uploads**
 
@@ -95,7 +95,6 @@ The system will use **Docker containers** to sandbox slicing and **PrusaSlicerâ€
 - **Selected color** (possible upcharge)
 - **Print duration** ($ per hour)
 - **Support material usage** (extra cost)
+- Should have a useful admin ui that i can adjust said cost
 
 ---
-
-This should be **ready for AI-assisted coding** or for a developer to take over efficiently. Let me know if you want any refinements! ðŸš€

@@ -23,6 +23,10 @@ lib-cov
 coverage
 *.lcov
 
+# Pythong env
+
+venv
+
 # nyc test coverage
 .nyc_output
 
