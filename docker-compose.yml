@@ -7,5 +7,5 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./UserModels:/app/shared
+      - ./userModels:/app/shared
     restart: unless-stopped

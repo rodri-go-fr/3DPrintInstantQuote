@@ -7,14 +7,14 @@ PIP := pip3
 
 help:
 	@echo "Available commands:"
-	@echo "  make install       - Install all dependencies (Docker, Python venv, Node.js)"
-	@echo "  make setup-venv    - Set up Python virtual environment"
-	@echo "  make backend       - Start the backend server"
-	@echo "  make frontend      - Start the frontend development server"
-	@echo "  make start         - Start both backend and frontend"
-	@echo "  make stop          - Stop all services"
-	@echo "  make restart       - Restart all services"
-	@echo "  make clean         - Remove virtual environment and temporary files"
+	@echo "  make install         - Install all dependencies (Docker, Python venv, Node.js)"
+	@echo "  make setup-venv      - Set up Python virtual environment"
+	@echo "  make backend         - Start the backend server"
+	@echo "  make frontend        - Start the frontend development server (auto-detects environment)"
+	@echo "  make start           - Start both backend and frontend"
+	@echo "  make stop            - Stop all services"
+	@echo "  make restart         - Restart all services"
+	@echo "  make clean           - Remove virtual environment and temporary files"
 
 install:
 	@chmod +x install.sh && ./install.sh
@@ -46,8 +46,7 @@ backend:
 	@./start.sh
 
 frontend:
-	@echo "Starting frontend development server..."
-	@cd frontend && npx next dev
+	@./start-frontend.sh
 
 start: backend
 	@echo "Starting all services..."

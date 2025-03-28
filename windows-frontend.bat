@@ -1,0 +1,13 @@
+@echo off
+echo Starting frontend development server for Windows...
+
+cd frontend
+
+echo Checking dependencies...
+call npm install
+
+echo Checking Tailwind CSS...
+call npm install tailwindcss postcss autoprefixer
+
+echo Starting Next.js development server...
+call npx next dev
