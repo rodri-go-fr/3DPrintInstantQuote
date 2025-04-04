@@ -5,7 +5,7 @@
  */
 
 // Base API URL - configurable for different environments
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 /**
  * Interface for upload parameters
